@@ -8,4 +8,5 @@ type FilterableContainer interface {
 	Enabled() (bool, bool)
 	Scope() (string, bool)
 	ImageName() string
+	Hostname() string
 }

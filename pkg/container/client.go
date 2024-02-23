@@ -267,6 +267,11 @@ func (client dockerClient) StartContainer(c t.Container) (t.ContainerID, error) 
 
 	log.Infof("Creating %s", name)
 
+	// To support podman
+
+	hostConfig.Ulimits = nil
+	hostConfig.MemorySwappiness = nil
+
 	createdContainer, err := client.api.ContainerCreate(bg, config, hostConfig, simpleNetworkConfig, nil, name)
 	if err != nil {
 		return "", err
@@ -330,7 +335,7 @@ func (client dockerClient) IsContainerStale(container t.Container, params t.Upda
 
 func (client dockerClient) HasNewImage(ctx context.Context, container t.Container) (hasNew bool, latestImage t.ImageID, err error) {
 	currentImageID := t.ImageID(container.ContainerInfo().ContainerJSONBase.Image)
-	imageName := container.ImageName()
+	imageName := container.NewImageName()
 
 	newImageInfo, _, err := client.api.ImageInspectWithRaw(ctx, imageName)
 	if err != nil {
@@ -351,7 +356,7 @@ func (client dockerClient) HasNewImage(ctx context.Context, container t.Containe
 // to match the one that the registry reports via a HEAD request
 func (client dockerClient) PullImage(ctx context.Context, container t.Container) error {
 	containerName := container.Name()
-	imageName := container.ImageName()
+	imageName := container.NewImageName()
 
 	fields := log.Fields{
 		"image":     imageName,

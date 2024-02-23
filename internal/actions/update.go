@@ -33,6 +33,10 @@ func Update(client container.Client, params types.UpdateParams) (types.Report, e
 	staleCheckFailed := 0
 
 	for i, targetContainer := range containers {
+		if targetContainer.IsPMM() {
+			targetContainer.SetNewImageName(params.NewImageName)
+			log.Tracef("PMM container %s new image name is %s", targetContainer.Name(), params.NewImageName)
+		}
 		stale, newestImage, err := client.IsContainerStale(targetContainer, params)
 		shouldUpdate := stale && !params.NoRestart && !targetContainer.IsMonitorOnly(params)
 		if err == nil && shouldUpdate {

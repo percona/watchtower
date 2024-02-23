@@ -94,6 +94,18 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 		"Comma-separated list of containers to explicitly exclude from watching.")
 
 	flags.StringP(
+		"new-image-name",
+		"",
+		viper.GetString("WATCHTOWER_NEW_IMAGE_NAME"),
+		"Comma-separated list of containers to explicitly exclude from watching.")
+
+	flags.StringSliceP(
+		"allowed-image-repos",
+		"",
+		regexp.MustCompile("[, ]+").Split(envString("WATCHTOWER_ALLOWED_IMAGE_REPOS"), -1),
+		"Comma-separated list of allowed image repositories to update.")
+
+	flags.StringP(
 		"log-format",
 		"l",
 		viper.GetString("WATCHTOWER_LOG_FORMAT"),

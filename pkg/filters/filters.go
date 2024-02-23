@@ -179,3 +179,15 @@ func BuildFilter(names []string, disableNames []string, enableLabel bool, scope 
 
 	return filter, filterDesc
 }
+
+func FilterByHostname(hostname string, baseFilter t.Filter) t.Filter {
+	if hostname == "" {
+		return baseFilter
+	}
+	return func(c t.FilterableContainer) bool {
+		if c.Hostname() == hostname {
+			return baseFilter(c)
+		}
+		return false
+	}
+}

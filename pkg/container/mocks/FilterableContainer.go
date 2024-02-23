@@ -7,6 +7,19 @@ type FilterableContainer struct {
 	mock.Mock
 }
 
+func (_m *FilterableContainer) Hostname() string {
+	ret := _m.Called()
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	return r0
+}
+
 // Enabled provides a mock function with given fields:
 func (_m *FilterableContainer) Enabled() (bool, bool) {
 	ret := _m.Called()

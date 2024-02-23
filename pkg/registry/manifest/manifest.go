@@ -13,7 +13,7 @@ import (
 
 // BuildManifestURL from raw image data
 func BuildManifestURL(container types.Container) (string, error) {
-	normalizedRef, err := ref.ParseDockerRef(container.ImageName())
+	normalizedRef, err := ref.ParseDockerRef(container.NewImageName())
 	if err != nil {
 		return "", err
 	}
