@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
+	"golang.org/x/net/context"
 	"math"
 	"net/http"
 	"os"
@@ -106,6 +106,11 @@ func PreRun(cmd *cobra.Command, _ []string) {
 	newImageName, _ = f.GetString("new-image-name")
 	allowedImageRepos, _ = f.GetStringSlice("allowed-image-repos")
 
+	if len(allowedImageRepos) == 0 {
+		log.Warn("No allowed image repositories specified. Setting default value to percona/pmm-server and perconalab/pmm-server")
+		allowedImageRepos = append(allowedImageRepos, "percona/pmm-server", "perconalab/pmm-server")
+	}
+
 	if scope != "" {
 		log.Debugf(`Using scope %q`, scope)
 	}
@@ -191,10 +196,20 @@ func Run(c *cobra.Command, names []string) {
 
 	if enableUpdateAPI {
 		updateHandler := update.New(func(images []string, hostname string, newImageName string) error {
-			filterByImage := filters.FilterByImage(images, filter)
-			metric, err := runUpdatesWithNotifications(filters.FilterByHostname(hostname, filterByImage), newImageName)
-			metrics.RegisterScan(metric)
-			return err
+			f := filters.FilterByImage(images, filter)
+			f = filters.FilterByHostname(hostname, f)
+			err := validateParams(f, newImageName)
+			if err != nil {
+				return err
+			}
+			go func() {
+				metric, err := runUpdatesWithNotifications(f, newImageName)
+				metrics.RegisterScan(metric)
+				if err != nil {
+					log.Error(err)
+				}
+			}()
+			return nil
 		}, updateLock)
 		httpAPI.RegisterFunc(updateHandler.Path, updateHandler.Handle)
 		// If polling isn't enabled the scheduler is never started, and
@@ -218,6 +233,35 @@ func Run(c *cobra.Command, names []string) {
 	}
 
 	os.Exit(1)
+}
+
+func validateParams(f t.Filter, newImageName string) error {
+	containers, err := client.ListContainers(f)
+	if err != nil {
+		return err
+	}
+	if len(containers) == 0 {
+		return errors.New("no containers found")
+	}
+	if newImageName != "" {
+		for _, c := range containers {
+			if !c.IsPMM() {
+				return errors.New("container is not a PMM server")
+			}
+		}
+	}
+
+	if !isImageAllowed(allowedImageRepos, newImageName) {
+		return errors.New("image not allowed")
+	}
+	isContainerStale, err := client.PullNeeded(context.TODO(), containers[0])
+	if err != nil {
+		return err
+	}
+	if !isContainerStale {
+		return errors.New("container is already up to date")
+	}
+	return nil
 }
 
 func logNotifyExit(err error) {
@@ -383,9 +427,6 @@ func runUpdatesWithNotifications(filter t.Filter, newImageName string) (*metrics
 		NoPull:            noPull,
 		NewImageName:      newImageName,
 		AllowedImageRepos: allowedImageRepos,
-	}
-	if !isImageAllowed(allowedImageRepos, newImageName) {
-		return nil, fmt.Errorf("newImageName %s is not in the allowed repos list", newImageName)
 	}
 
 	result, err := actions.Update(client, updateParams)
