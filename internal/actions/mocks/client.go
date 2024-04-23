@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/net/context"
+
 	t "github.com/containrrr/watchtower/pkg/types"
 )
 
@@ -97,4 +99,9 @@ func (client MockClient) IsContainerStale(cont t.Container, params t.UpdateParam
 // WarnOnHeadPullFailed is always true for the mock client
 func (client MockClient) WarnOnHeadPullFailed(_ t.Container) bool {
 	return true
+}
+
+func (client MockClient) PullNeeded(ctx context.Context, container t.Container) (bool, error) {
+	isContainerStale, _, err := client.IsContainerStale(container, t.UpdateParams{})
+	return isContainerStale, err
 }
