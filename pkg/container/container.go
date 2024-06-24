@@ -29,6 +29,7 @@ func NewContainer(containerInfo *types.ContainerJSON, imageInfo *types.ImageInsp
 type Container struct {
 	LinkedToRestarting bool
 	Stale              bool
+	newImageName       string
 
 	containerInfo *types.ContainerJSON
 	imageInfo     *types.ImageInspect
@@ -52,6 +53,16 @@ func (c *Container) SetLinkedToRestarting(value bool) {
 // SetStale implements sets the Stale field for the container
 func (c *Container) SetStale(value bool) {
 	c.Stale = value
+}
+
+// SetNewImageName sets the NewImageName field for the container
+func (c *Container) SetNewImageName(value string) {
+	c.newImageName = value
+}
+
+// Hostname returns the Docker container hostname.
+func (c *Container) Hostname() string {
+	return c.containerInfo.Config.Hostname
 }
 
 // ContainerInfo fetches JSON info for the container
@@ -113,6 +124,17 @@ func (c Container) ImageName() string {
 	}
 
 	return imageName
+}
+
+// NewImageName returns the name of the Docker image that should be used to
+// restart the container. If the container has been assigned a new image name
+// (e.g. via the API), that name is returned. Otherwise, the original image
+// name is returned.
+func (c Container) NewImageName() string {
+	if c.newImageName != "" {
+		return c.newImageName
+	}
+	return c.ImageName()
 }
 
 // Enabled returns the value of the container enabled label and if the label
@@ -217,6 +239,18 @@ func (c Container) ToRestart() bool {
 // the container metadata.
 func (c Container) IsWatchtower() bool {
 	return ContainsWatchtowerLabel(c.containerInfo.Config.Labels)
+}
+
+// IsPMM returns a boolean flag indicating whether the current
+// container is the PMM container. The watchtower container is
+// identified by the presence of the "com.percona.pmm" label in
+// the container metadata.
+func (c Container) IsPMM() bool {
+	if strings.Contains(c.ImageName(), "pmm-server") {
+		return true
+	}
+	value, _ := c.getBoolLabelValue(pmmLabel)
+	return value
 }
 
 // PreUpdateTimeout checks whether a container has a specific timeout set
@@ -343,7 +377,7 @@ func (c Container) GetCreateConfig() *dockercontainer.Config {
 		config.ExposedPorts[p] = struct{}{}
 	}
 
-	config.Image = c.ImageName()
+	config.Image = c.NewImageName()
 	return config
 }
 

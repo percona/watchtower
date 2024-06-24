@@ -51,12 +51,16 @@ type Container interface {
 	ImageID() ImageID
 	SafeImageID() ImageID
 	ImageName() string
+	SetNewImageName(string)
+	NewImageName() string
+	Hostname() string
 	Enabled() (bool, bool)
 	IsMonitorOnly(UpdateParams) bool
 	Scope() (string, bool)
 	Links() []string
 	ToRestart() bool
 	IsWatchtower() bool
+	IsPMM() bool
 	StopSignal() string
 	HasImageInfo() bool
 	ImageInfo() *types.ImageInspect

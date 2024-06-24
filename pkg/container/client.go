@@ -34,6 +34,7 @@ type Client interface {
 	ExecuteCommand(containerID t.ContainerID, command string, timeout int) (SkipUpdate bool, err error)
 	RemoveImageByID(t.ImageID) error
 	WarnOnHeadPullFailed(container t.Container) bool
+	PullNeeded(ctx context.Context, container t.Container) (bool, error)
 }
 
 // NewClient returns a new Client instance which can be used to interact with
@@ -267,6 +268,11 @@ func (client dockerClient) StartContainer(c t.Container) (t.ContainerID, error) 
 
 	log.Infof("Creating %s", name)
 
+	// To support podman
+
+	hostConfig.Ulimits = nil
+	hostConfig.MemorySwappiness = nil
+
 	createdContainer, err := client.api.ContainerCreate(bg, config, hostConfig, simpleNetworkConfig, nil, name)
 	if err != nil {
 		return "", err
@@ -330,7 +336,7 @@ func (client dockerClient) IsContainerStale(container t.Container, params t.Upda
 
 func (client dockerClient) HasNewImage(ctx context.Context, container t.Container) (hasNew bool, latestImage t.ImageID, err error) {
 	currentImageID := t.ImageID(container.ContainerInfo().ContainerJSONBase.Image)
-	imageName := container.ImageName()
+	imageName := container.NewImageName()
 
 	newImageInfo, _, err := client.api.ImageInspectWithRaw(ctx, imageName)
 	if err != nil {
@@ -347,11 +353,45 @@ func (client dockerClient) HasNewImage(ctx context.Context, container t.Containe
 	return true, newImageID, nil
 }
 
+func (client dockerClient) PullNeeded(_ context.Context, container t.Container) (bool, error) {
+	imageName := container.NewImageName()
+	containerName := container.Name()
+
+	fields := log.Fields{
+		"image":     imageName,
+		"container": containerName,
+	}
+
+	opts, err := registry.GetPullOptions(imageName)
+	if err != nil {
+		log.Debugf("Error loading authentication credentials %s", err)
+		return false, err
+	}
+	if opts.RegistryAuth != "" {
+		log.Debug("Credentials loaded")
+	}
+
+	log.WithFields(fields).Debugf("Checking if pull is needed")
+
+	match, err := digest.CompareDigest(container, opts.RegistryAuth)
+
+	if err != nil {
+		headLevel := log.DebugLevel
+		if client.WarnOnHeadPullFailed(container) {
+			headLevel = log.WarnLevel
+		}
+		log.WithFields(fields).Logf(headLevel, "Could not do a head request for %q, falling back to regular pull.", imageName)
+		log.WithFields(fields).Log(headLevel, "Reason: ", err)
+		return false, err
+	}
+	return !match, nil
+}
+
 // PullImage pulls the latest image for the supplied container, optionally skipping if it's digest can be confirmed
 // to match the one that the registry reports via a HEAD request
 func (client dockerClient) PullImage(ctx context.Context, container t.Container) error {
 	containerName := container.Name()
-	imageName := container.ImageName()
+	imageName := container.NewImageName()
 
 	fields := log.Fields{
 		"image":     imageName,

@@ -3,6 +3,7 @@ package container
 import "strconv"
 
 const (
+	pmmLabel               = "com.percona.pmm"
 	watchtowerLabel        = "com.centurylinklabs.watchtower"
 	signalLabel            = "com.centurylinklabs.watchtower.stop-signal"
 	enableLabel            = "com.centurylinklabs.watchtower.enable"

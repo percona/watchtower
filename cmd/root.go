@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"golang.org/x/net/context"
 	"math"
 	"net/http"
 	"os"
@@ -43,6 +44,8 @@ var (
 	rollingRestart    bool
 	scope             string
 	labelPrecedence   bool
+	newImageName      string
+	allowedImageRepos []string
 )
 
 var rootCmd = NewRootCommand()
@@ -100,6 +103,13 @@ func PreRun(cmd *cobra.Command, _ []string) {
 	rollingRestart, _ = f.GetBool("rolling-restart")
 	scope, _ = f.GetString("scope")
 	labelPrecedence, _ = f.GetBool("label-take-precedence")
+	newImageName, _ = f.GetString("new-image-name")
+	allowedImageRepos, _ = f.GetStringSlice("allowed-image-repos")
+
+	if len(allowedImageRepos) == 0 {
+		log.Warn("No allowed image repositories specified. Setting default value to percona/pmm-server and perconalab/pmm-server")
+		allowedImageRepos = append(allowedImageRepos, "percona/pmm-server", "perconalab/pmm-server")
+	}
 
 	if scope != "" {
 		log.Debugf(`Using scope %q`, scope)
@@ -165,7 +175,10 @@ func Run(c *cobra.Command, names []string) {
 
 	if runOnce {
 		writeStartupMessage(c, time.Time{}, filterDesc)
-		runUpdatesWithNotifications(filter)
+		_, err := runUpdatesWithNotifications(filter, newImageName)
+		if err != nil {
+			logNotifyExit(err)
+		}
 		notifier.Close()
 		os.Exit(0)
 		return
@@ -182,9 +195,21 @@ func Run(c *cobra.Command, names []string) {
 	httpAPI := api.New(apiToken)
 
 	if enableUpdateAPI {
-		updateHandler := update.New(func(images []string) {
-			metric := runUpdatesWithNotifications(filters.FilterByImage(images, filter))
-			metrics.RegisterScan(metric)
+		updateHandler := update.New(func(images []string, hostname string, newImageName string) error {
+			f := filters.FilterByImage(images, filter)
+			f = filters.FilterByHostname(hostname, f)
+			err := validateParams(f, newImageName)
+			if err != nil {
+				return err
+			}
+			go func() {
+				metric, err := runUpdatesWithNotifications(f, newImageName)
+				metrics.RegisterScan(metric)
+				if err != nil {
+					log.Error(err)
+				}
+			}()
+			return nil
 		}, updateLock)
 		httpAPI.RegisterFunc(updateHandler.Path, updateHandler.Handle)
 		// If polling isn't enabled the scheduler is never started, and
@@ -208,6 +233,35 @@ func Run(c *cobra.Command, names []string) {
 	}
 
 	os.Exit(1)
+}
+
+func validateParams(f t.Filter, newImageName string) error {
+	containers, err := client.ListContainers(f)
+	if err != nil {
+		return err
+	}
+	if len(containers) == 0 {
+		return errors.New("no containers found")
+	}
+	if newImageName != "" {
+		for _, c := range containers {
+			if !c.IsPMM() {
+				return errors.New("container is not a PMM server")
+			}
+		}
+	}
+
+	if !isImageAllowed(allowedImageRepos, newImageName) {
+		return errors.New("image not allowed")
+	}
+	isContainerStale, err := client.PullNeeded(context.TODO(), containers[0])
+	if err != nil {
+		return err
+	}
+	if !isContainerStale {
+		return errors.New("container is already up to date")
+	}
+	return nil
 }
 
 func logNotifyExit(err error) {
@@ -322,8 +376,11 @@ func runUpgradesOnSchedule(c *cobra.Command, filter t.Filter, filtering string, 
 			select {
 			case v := <-lock:
 				defer func() { lock <- v }()
-				metric := runUpdatesWithNotifications(filter)
+				metric, err := runUpdatesWithNotifications(filter, newImageName)
 				metrics.RegisterScan(metric)
+				if err != nil {
+					log.Error(err)
+				}
 			default:
 				// Update was skipped
 				metrics.RegisterScan(nil)
@@ -356,23 +413,23 @@ func runUpgradesOnSchedule(c *cobra.Command, filter t.Filter, filtering string, 
 	return nil
 }
 
-func runUpdatesWithNotifications(filter t.Filter) *metrics.Metric {
+func runUpdatesWithNotifications(filter t.Filter, newImageName string) (*metrics.Metric, error) {
 	notifier.StartNotification()
 	updateParams := t.UpdateParams{
-		Filter:          filter,
-		Cleanup:         cleanup,
-		NoRestart:       noRestart,
-		Timeout:         timeout,
-		MonitorOnly:     monitorOnly,
-		LifecycleHooks:  lifecycleHooks,
-		RollingRestart:  rollingRestart,
-		LabelPrecedence: labelPrecedence,
-		NoPull:          noPull,
+		Filter:            filter,
+		Cleanup:           cleanup,
+		NoRestart:         noRestart,
+		Timeout:           timeout,
+		MonitorOnly:       monitorOnly,
+		LifecycleHooks:    lifecycleHooks,
+		RollingRestart:    rollingRestart,
+		LabelPrecedence:   labelPrecedence,
+		NoPull:            noPull,
+		NewImageName:      newImageName,
+		AllowedImageRepos: allowedImageRepos,
 	}
+
 	result, err := actions.Update(client, updateParams)
-	if err != nil {
-		log.Error(err)
-	}
 	notifier.SendNotification(result)
 	metricResults := metrics.NewMetric(result)
 	notifications.LocalLog.WithFields(log.Fields{
@@ -380,5 +437,17 @@ func runUpdatesWithNotifications(filter t.Filter) *metrics.Metric {
 		"Updated": metricResults.Updated,
 		"Failed":  metricResults.Failed,
 	}).Info("Session done")
-	return metricResults
+	return metricResults, err
+}
+
+func isImageAllowed(repos []string, name string) bool {
+	if newImageName == "" || len(repos) == 0 {
+		return true
+	}
+	for _, repo := range repos {
+		if strings.HasPrefix(name, repo) {
+			return true
+		}
+	}
+	return false
 }

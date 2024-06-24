@@ -243,6 +243,25 @@ Environment Variable: WATCHTOWER_DISABLE_CONTAINERS
              Default: ""
 ```
 
+## Upgrade to another image name
+
+```text
+            Argument: --new-image-name
+Environment Variable: WATCHTOWER_NEW_IMAGE_NAME
+                Type: String
+             Default: ""
+```
+
+## Allowed images to update
+List of allowed image repositories to update. If set, only containers with images from these repositories will be used to update. This can be used to restrict watchtower to only update containers with images from a specific registry.
+
+```text
+            Argument: --allowed-image-repos
+Environment Variable: WATCHTOWER_ALLOWED_IMAGE_REPOS
+                Type: Comma- or space-separated string list
+             Default: ""
+```
+
 ## Without updating containers
 Will only monitor for new images, send notifications and invoke
 the [pre-check/post-check hooks](https://containrrr.dev/watchtower/lifecycle-hooks/), but will __not__ update the
