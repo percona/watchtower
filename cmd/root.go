@@ -203,6 +203,7 @@ func Run(c *cobra.Command, names []string) {
 				return err
 			}
 			go func() {
+				time.Sleep(2 * time.Second) // We need to wait for the HTTP API to response before we can start the update
 				metric, err := runUpdatesWithNotifications(f, newImageName)
 				metrics.RegisterScan(metric)
 				if err != nil {
