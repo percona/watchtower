@@ -105,3 +105,6 @@ func (client MockClient) PullNeeded(ctx context.Context, container t.Container) 
 	isContainerStale, _, err := client.IsContainerStale(container, t.UpdateParams{})
 	return isContainerStale, err
 }
+func (client MockClient) HasNewImage(ctx context.Context, container t.Container) (hasNew bool, latestImage t.ImageID, err error) {
+	return client.IsContainerStale(container, t.UpdateParams{})
+}

@@ -35,6 +35,7 @@ type Client interface {
 	RemoveImageByID(t.ImageID) error
 	WarnOnHeadPullFailed(container t.Container) bool
 	PullNeeded(ctx context.Context, container t.Container) (bool, error)
+	HasNewImage(ctx context.Context, container t.Container) (hasNew bool, latestImage t.ImageID, err error)
 }
 
 // NewClient returns a new Client instance which can be used to interact with

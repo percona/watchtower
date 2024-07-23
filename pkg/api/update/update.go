@@ -1,6 +1,8 @@
 package update
 
 import (
+	"errors"
+	"github.com/containrrr/watchtower/pkg/types"
 	"io"
 	"net/http"
 	"os"
@@ -71,24 +73,32 @@ func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 		chanValue := <-lock
 		defer func() { lock <- chanValue }()
 		err := handle.fn(images, hostname, newImageName)
-		if err != nil {
-			log.Error(err)
-			w.Write([]byte(err.Error()))
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleError(w, err)
 	} else {
 		select {
 		case chanValue := <-lock:
 			defer func() { lock <- chanValue }()
 			err := handle.fn(images, hostname, newImageName)
-			if err != nil {
-				log.Error(err)
-				w.Write([]byte(err.Error()))
-				w.WriteHeader(http.StatusInternalServerError)
-			}
+			handleError(w, err)
 		default:
 			log.Debug("Skipped. Another update already running.")
 		}
 	}
 
+}
+
+func handleError(w http.ResponseWriter, err error) {
+	if err != nil {
+		if errors.Is(err, &types.ValidationError{}) {
+			log.Warning(err)
+			w.WriteHeader(http.StatusPreconditionFailed)
+			w.Write([]byte(err.Error()))
+		} else {
+			log.Error(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Internal Server Error"))
+		}
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
 }
