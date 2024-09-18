@@ -200,7 +200,7 @@ func Run(c *cobra.Command, names []string) {
 			f = filters.FilterByHostname(hostname, f)
 
 			updateParams := t.UpdateParams{
-				Filter:            filter,
+				Filter:            f,
 				NewImageName:      newImageName,
 				AllowedImageRepos: allowedImageRepos,
 			}

@@ -1,6 +1,7 @@
 package validation
 
 import (
+	log "github.com/sirupsen/logrus"
 	"strings"
 
 	"github.com/containrrr/watchtower/pkg/container"
@@ -22,27 +23,31 @@ func ValidateParams(client container.Client, params types.UpdateParams) error {
 			if !c.IsPMM() {
 				return types.NewValidationError("container is not a PMM server")
 			}
+
+			c.SetNewImageName(params.NewImageName)
+			log.Tracef("PMM container %s new image name is %s", c.Name(), params.NewImageName)
 		}
 	}
 
 	if !isImageAllowed(params.AllowedImageRepos, params.NewImageName) {
 		return types.NewValidationError("image not allowed")
 	}
+
+	hasNew, _, err := client.HasNewImage(context.TODO(), containers[0])
+	if err != nil {
+		return err
+	}
+	// if new image is available locally, we don't need to check remotely.
+	if hasNew {
+		return nil
+	}
 	pullNeeded, err := client.PullNeeded(context.TODO(), containers[0])
 	if err != nil {
 		return err
 	}
-	// if pull is needed, we don't need to check for new image locally.
-	if pullNeeded {
-		return nil
-	} else {
-		hasNew, _, err := client.HasNewImage(context.TODO(), containers[0])
-		if err != nil {
-			return err
-		}
-		if !hasNew {
-			return types.NewValidationError("no new image available")
-		}
+	// if pull is needed, we don't need to check digest
+	if !pullNeeded {
+		return types.NewValidationError("no new image available")
 	}
 	return nil
 }

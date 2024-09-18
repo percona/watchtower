@@ -39,6 +39,7 @@ type Handler struct {
 // Handle is the actual http.Handle function doing all the heavy lifting
 func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 	log.Info("Updates triggered by HTTP API request.")
+	log.Debugf("Request received: %s", r.URL.String())
 
 	_, err := io.Copy(os.Stdout, r.Body)
 	if err != nil {
@@ -49,6 +50,7 @@ func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 	var images []string
 	imageQueries, found := r.URL.Query()["image"]
 	if found {
+		log.Debugf("Image parameter found: %s", imageQueries)
 		for _, image := range imageQueries {
 			images = append(images, strings.Split(image, ",")...)
 		}
@@ -60,12 +62,14 @@ func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 	var hostname string
 	hostnameParams, found := r.URL.Query()["hostname"]
 	if found {
+		log.Debugf("Hostname parameter found: %s", hostnameParams[0])
 		hostname = hostnameParams[0]
 	}
 
 	var newImageName string
 	newImageNameParams, found := r.URL.Query()["newImageName"]
 	if found {
+		log.Debugf("New image name parameter found: %s", newImageNameParams[0])
 		newImageName = newImageNameParams[0]
 	}
 
