@@ -208,6 +208,7 @@ func Run(c *cobra.Command, names []string) {
 			if err != nil {
 				return err
 			}
+			log.Debugf("Validation passed for %v", updateParams)
 			go func() {
 				time.Sleep(2 * time.Second) // We need to wait for the HTTP API to response before we can start the update
 				metric, err := runUpdatesWithNotifications(f, newImageName)

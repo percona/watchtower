@@ -1,11 +1,12 @@
 package validation
 
 import (
-	log "github.com/sirupsen/logrus"
+	"github.com/docker/docker/errdefs"
 	"strings"
 
 	"github.com/containrrr/watchtower/pkg/container"
 	"github.com/containrrr/watchtower/pkg/types"
+	log "github.com/sirupsen/logrus"
 
 	"golang.org/x/net/context"
 )
@@ -35,7 +36,10 @@ func ValidateParams(client container.Client, params types.UpdateParams) error {
 
 	hasNew, _, err := client.HasNewImage(context.TODO(), containers[0])
 	if err != nil {
-		return err
+		if !errdefs.IsNotFound(err) {
+			return err
+		}
+		log.Debugf("Image not found locally, checking remotely: %s", err)
 	}
 	// if new image is available locally, we don't need to check remotely.
 	if hasNew {
