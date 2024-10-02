@@ -383,7 +383,10 @@ func (client dockerClient) PullNeeded(_ context.Context, container t.Container) 
 		}
 		log.WithFields(fields).Logf(headLevel, "Could not do a head request for %q, falling back to regular pull.", imageName)
 		log.WithFields(fields).Log(headLevel, "Reason: ", err)
-		return false, err
+
+		// If we can't do a head request, we can't be sure if the image is up to date
+		// so we should pull it to be safe
+		return true, nil
 	}
 	return !match, nil
 }
