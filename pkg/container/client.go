@@ -35,6 +35,7 @@ type Client interface {
 	RemoveImageByID(t.ImageID) error
 	WarnOnHeadPullFailed(container t.Container) bool
 	PullNeeded(ctx context.Context, container t.Container) (bool, error)
+	HasNewImage(ctx context.Context, container t.Container) (hasNew bool, latestImage t.ImageID, err error)
 }
 
 // NewClient returns a new Client instance which can be used to interact with
@@ -382,7 +383,10 @@ func (client dockerClient) PullNeeded(_ context.Context, container t.Container) 
 		}
 		log.WithFields(fields).Logf(headLevel, "Could not do a head request for %q, falling back to regular pull.", imageName)
 		log.WithFields(fields).Log(headLevel, "Reason: ", err)
-		return false, err
+
+		// If we can't do a head request, we can't be sure if the image is up to date
+		// so we should pull it to be safe
+		return true, nil
 	}
 	return !match, nil
 }

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"errors"
-	"golang.org/x/net/context"
 	"math"
 	"net/http"
 	"os"
@@ -23,6 +22,7 @@ import (
 	"github.com/containrrr/watchtower/pkg/metrics"
 	"github.com/containrrr/watchtower/pkg/notifications"
 	t "github.com/containrrr/watchtower/pkg/types"
+	"github.com/containrrr/watchtower/pkg/validation"
 	"github.com/robfig/cron"
 	log "github.com/sirupsen/logrus"
 
@@ -198,11 +198,19 @@ func Run(c *cobra.Command, names []string) {
 		updateHandler := update.New(func(images []string, hostname string, newImageName string) error {
 			f := filters.FilterByImage(images, filter)
 			f = filters.FilterByHostname(hostname, f)
-			err := validateParams(f, newImageName)
+
+			updateParams := t.UpdateParams{
+				Filter:            f,
+				NewImageName:      newImageName,
+				AllowedImageRepos: allowedImageRepos,
+			}
+			err := validation.ValidateParams(client, updateParams)
 			if err != nil {
 				return err
 			}
+			log.Debugf("Validation passed for %v", updateParams)
 			go func() {
+				time.Sleep(2 * time.Second) // We need to wait for the HTTP API to response before we can start the update
 				metric, err := runUpdatesWithNotifications(f, newImageName)
 				metrics.RegisterScan(metric)
 				if err != nil {
@@ -233,35 +241,6 @@ func Run(c *cobra.Command, names []string) {
 	}
 
 	os.Exit(1)
-}
-
-func validateParams(f t.Filter, newImageName string) error {
-	containers, err := client.ListContainers(f)
-	if err != nil {
-		return err
-	}
-	if len(containers) == 0 {
-		return errors.New("no containers found")
-	}
-	if newImageName != "" {
-		for _, c := range containers {
-			if !c.IsPMM() {
-				return errors.New("container is not a PMM server")
-			}
-		}
-	}
-
-	if !isImageAllowed(allowedImageRepos, newImageName) {
-		return errors.New("image not allowed")
-	}
-	isContainerStale, err := client.PullNeeded(context.TODO(), containers[0])
-	if err != nil {
-		return err
-	}
-	if !isContainerStale {
-		return errors.New("container is already up to date")
-	}
-	return nil
 }
 
 func logNotifyExit(err error) {
@@ -438,16 +417,4 @@ func runUpdatesWithNotifications(filter t.Filter, newImageName string) (*metrics
 		"Failed":  metricResults.Failed,
 	}).Info("Session done")
 	return metricResults, err
-}
-
-func isImageAllowed(repos []string, name string) bool {
-	if newImageName == "" || len(repos) == 0 {
-		return true
-	}
-	for _, repo := range repos {
-		if strings.HasPrefix(name, repo) {
-			return true
-		}
-	}
-	return false
 }
