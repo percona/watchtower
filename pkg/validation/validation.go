@@ -57,10 +57,12 @@ func ValidateParams(client container.Client, params types.UpdateParams) error {
 }
 
 func isImageAllowed(repos []string, newImageName string) bool {
+	newImageName = strings.TrimPrefix(newImageName, "docker.io/")
 	if newImageName == "" || len(repos) == 0 {
 		return true
 	}
 	for _, repo := range repos {
+		repo = strings.TrimPrefix(repo, "docker.io/")
 		if strings.HasPrefix(newImageName, repo) {
 			return true
 		}
