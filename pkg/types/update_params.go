@@ -17,4 +17,5 @@ type UpdateParams struct {
 	LabelPrecedence   bool
 	NewImageName      string
 	AllowedImageRepos []string
+	StopWatchtower    bool
 }
