@@ -93,7 +93,8 @@ func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 
 func handleError(w http.ResponseWriter, err error) {
 	if err != nil {
-		if errors.Is(err, &types.ValidationError{}) {
+		var validationErr *types.ValidationError
+		if errors.As(err, &validationErr) {
 			log.Warning(err)
 			w.WriteHeader(http.StatusPreconditionFailed)
 			w.Write([]byte(err.Error()))
