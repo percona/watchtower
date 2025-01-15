@@ -2,10 +2,11 @@ package update
 
 import (
 	"errors"
-	"github.com/containrrr/watchtower/pkg/types"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/containrrr/watchtower/pkg/types"
 )
 
 func TestHandleError(t *testing.T) {
@@ -33,7 +34,6 @@ func TestHandleError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_ = httptest.NewRequest(http.MethodGet, "/v1/update", nil)
 			rr := httptest.NewRecorder()
 
 			handleError(rr, tt.error)

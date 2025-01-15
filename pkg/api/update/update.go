@@ -2,13 +2,14 @@ package update
 
 import (
 	"errors"
-	"github.com/containrrr/watchtower/pkg/types"
 	"io"
 	"net/http"
 	"os"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/containrrr/watchtower/pkg/types"
 )
 
 var (
