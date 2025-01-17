@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -17,7 +18,7 @@ var (
 )
 
 // New is a factory function creating a new  Handler instance
-func New(updateFn func(images []string, hostname string, newImageName string) error, updateLock chan bool) *Handler {
+func New(updateFn func(images []string, hostname string, newImageName string, stopWatchtower bool) error, updateLock chan bool) *Handler {
 	if updateLock != nil {
 		lock = updateLock
 	} else {
@@ -33,7 +34,7 @@ func New(updateFn func(images []string, hostname string, newImageName string) er
 
 // Handler is an API handler used for triggering container update scans
 type Handler struct {
-	fn   func(images []string, hostname string, newImageName string) error
+	fn   func(images []string, hostname string, newImageName string, stopWatchtower bool) error
 	Path string
 }
 
@@ -74,16 +75,29 @@ func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 		newImageName = newImageNameParams[0]
 	}
 
+	var stopWatchtower bool
+	stopWatchtowerParams, found := r.URL.Query()["stopWatchtower"]
+	if found {
+		log.Debugf("Stop watchtower parameter found: %s", stopWatchtowerParams[0])
+		stopWatchtower, err = strconv.ParseBool(stopWatchtowerParams[0])
+		if err != nil {
+			log.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Invalid stopWatchtower parameter"))
+			return
+		}
+	}
+
 	if len(images) > 0 {
 		chanValue := <-lock
 		defer func() { lock <- chanValue }()
-		err := handle.fn(images, hostname, newImageName)
+		err := handle.fn(images, hostname, newImageName, stopWatchtower)
 		handleError(w, err)
 	} else {
 		select {
 		case chanValue := <-lock:
 			defer func() { lock <- chanValue }()
-			err := handle.fn(images, hostname, newImageName)
+			err := handle.fn(images, hostname, newImageName, stopWatchtower)
 			handleError(w, err)
 		default:
 			log.Debug("Skipped. Another update already running.")

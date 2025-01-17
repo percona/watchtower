@@ -195,7 +195,7 @@ func Run(c *cobra.Command, names []string) {
 	httpAPI := api.New(apiToken)
 
 	if enableUpdateAPI {
-		updateHandler := update.New(func(images []string, hostname string, newImageName string) error {
+		updateHandler := update.New(func(images []string, hostname string, newImageName string, stopWatchtower bool) error {
 			f := filters.FilterByImage(images, filter)
 			f = filters.FilterByHostname(hostname, f)
 
@@ -203,6 +203,7 @@ func Run(c *cobra.Command, names []string) {
 				Filter:            f,
 				NewImageName:      newImageName,
 				AllowedImageRepos: allowedImageRepos,
+				StopWatchtower:    stopWatchtower,
 			}
 			err := validation.ValidateParams(client, updateParams)
 			if err != nil {
@@ -215,6 +216,10 @@ func Run(c *cobra.Command, names []string) {
 				metrics.RegisterScan(metric)
 				if err != nil {
 					log.Error(err)
+				}
+				if stopWatchtower {
+					log.Infoln("Stopping watchtower as requested")
+					os.Exit(0)
 				}
 			}()
 			return nil
