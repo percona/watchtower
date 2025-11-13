@@ -3,13 +3,13 @@ package container
 import (
 	"bytes"
 	"fmt"
-	"github.com/docker/docker/api/types/image"
 	"io"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	sdkClient "github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
